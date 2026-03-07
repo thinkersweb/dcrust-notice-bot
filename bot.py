@@ -24,16 +24,23 @@ def scrape_notices():
     r = requests.get(URL)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    row = soup.select("table tr")[1]
+    # Get only the newest notice
+    rows = soup.select("table tr")[1:2]
 
-    cols = row.select("td")
+    notices = []
 
-    title = cols[1].text.strip()
-    date = cols[2].text.strip()
+    for row in rows:
 
-    notice = f"{title} | {date}"
+        cols = row.select("td")
 
-return [notice]
+        title = cols[1].text.strip()
+        date = cols[2].text.strip()
+
+        notice = f"{title} | {date}"
+
+        notices.append(notice)
+
+    return notices
 
 
 def load_hashes():
