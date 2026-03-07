@@ -1,68 +1,78 @@
 import requests
 from bs4 import BeautifulSoup
+import hashlib
 import os
 
-BOT_TOKEN = os.environ['BOT_TOKEN']
-CHAT_ID = os.environ['CHAT_ID']
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHAT_ID = os.environ["CHAT_ID"]
 
 URL = "https://www.dcrustm.ac.in/welcome/dcrustnews/news"
 
-def get_latest_notices():
+
+def send_telegram(message):
+
+    api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    requests.post(api, data={
+        "chat_id": CHAT_ID,
+        "text": message
+    })
+
+
+def scrape_notices():
+
     r = requests.get(URL)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    rows = soup.select("table tr")[1:6]
+    rows = soup.select("table tr")[1:10]
 
     notices = []
 
     for row in rows:
+
         cols = row.select("td")
+
         title = cols[1].text.strip()
         date = cols[2].text.strip()
 
-        notices.append(f"{title} | {date}")
+        notice = f"{title} | {date}"
+
+        notices.append(notice)
 
     return notices
 
 
-def get_recent_messages():
+def load_hashes():
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    r = requests.get(url)
+    if not os.path.exists("hashes.txt"):
+        return set()
 
-    data = r.json()
-
-    messages = []
-
-    for update in data["result"]:
-        if "message" in update:
-            messages.append(update["message"]["text"])
-
-    return messages
+    with open("hashes.txt", "r") as f:
+        return set(f.read().splitlines())
 
 
-def send_message(text):
+def save_hash(hash_value):
 
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": text
-    })
+    with open("hashes.txt", "a") as f:
+        f.write(hash_value + "\n")
 
 
 def main():
 
-    notices = get_latest_notices()
-    sent_messages = get_recent_messages()
+    notices = scrape_notices()
+    stored_hashes = load_hashes()
 
     for notice in notices:
 
-        if notice not in str(sent_messages):
+        h = hashlib.md5(notice.encode()).hexdigest()
 
-            message = f"📢 New DCRUST Notice\n\n{notice}\n\n{URL}"
+        if h not in stored_hashes:
 
-            send_message(message)
+            message = f"📢 DCRUST New Notice\n\n{notice}\n\n{URL}"
+
+            send_telegram(message)
+
+            save_hash(h)
 
 
 if __name__ == "__main__":
