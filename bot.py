@@ -1,6 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-import hashlib
 import os
 
 BOT_TOKEN = os.environ['BOT_TOKEN']
@@ -8,25 +7,16 @@ CHAT_ID = os.environ['CHAT_ID']
 
 URL = "https://www.dcrustm.ac.in/welcome/dcrustnews/news"
 
-def send_telegram(message):
-    api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-
-    requests.post(api, data={
-        "chat_id": CHAT_ID,
-        "text": message
-    })
-
-def get_notices():
+def get_latest_notices():
     r = requests.get(URL)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    rows = soup.select("table tr")[1:6]  # top 5 notices
+    rows = soup.select("table tr")[1:6]
 
     notices = []
 
     for row in rows:
         cols = row.select("td")
-
         title = cols[1].text.strip()
         date = cols[2].text.strip()
 
@@ -35,35 +25,44 @@ def get_notices():
     return notices
 
 
-def load_hashes():
-    if not os.path.exists("hashes.txt"):
-        return set()
+def get_recent_messages():
 
-    with open("hashes.txt","r") as f:
-        return set(f.read().splitlines())
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    r = requests.get(url)
+
+    data = r.json()
+
+    messages = []
+
+    for update in data["result"]:
+        if "message" in update:
+            messages.append(update["message"]["text"])
+
+    return messages
 
 
-def save_hash(hash_value):
-    with open("hashes.txt","a") as f:
-        f.write(hash_value+"\n")
+def send_message(text):
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": text
+    })
 
 
 def main():
 
-    notices = get_notices()
-    processed = load_hashes()
+    notices = get_latest_notices()
+    sent_messages = get_recent_messages()
 
     for notice in notices:
 
-        h = hashlib.md5(notice.encode()).hexdigest()
-
-        if h not in processed:
+        if notice not in str(sent_messages):
 
             message = f"📢 New DCRUST Notice\n\n{notice}\n\n{URL}"
 
-            send_telegram(message)
-
-            save_hash(h)
+            send_message(message)
 
 
 if __name__ == "__main__":
