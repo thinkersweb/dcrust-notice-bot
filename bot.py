@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import hashlib
 import os
 
 BOT_TOKEN = os.environ['BOT_TOKEN']
@@ -7,40 +8,63 @@ CHAT_ID = os.environ['CHAT_ID']
 
 URL = "https://www.dcrustm.ac.in/welcome/dcrustnews/news"
 
-def get_latest_notice():
-    r = requests.get(URL)
-    soup = BeautifulSoup(r.text,"html.parser")
-
-    row = soup.select("table tr")[1]
-
-    title = row.select("td")[1].text.strip()
-    date = row.select("td")[2].text.strip()
-
-    return f"{title} | {date}"
-
 def send_telegram(message):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    api = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    requests.post(url,data={
+    requests.post(api, data={
         "chat_id": CHAT_ID,
         "text": message
     })
 
+def get_notices():
+    r = requests.get(URL)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    rows = soup.select("table tr")[1:6]  # top 5 notices
+
+    notices = []
+
+    for row in rows:
+        cols = row.select("td")
+
+        title = cols[1].text.strip()
+        date = cols[2].text.strip()
+
+        notices.append(f"{title} | {date}")
+
+    return notices
+
+
+def load_hashes():
+    if not os.path.exists("hashes.txt"):
+        return set()
+
+    with open("hashes.txt","r") as f:
+        return set(f.read().splitlines())
+
+
+def save_hash(hash_value):
+    with open("hashes.txt","a") as f:
+        f.write(hash_value+"\n")
+
+
 def main():
-    latest = get_latest_notice()
 
-    try:
-        with open("last_notice.txt","r") as f:
-            old = f.read()
-    except:
-        old = ""
+    notices = get_notices()
+    processed = load_hashes()
 
-    if latest != old:
-        message = f"📢 New DCRUST Notice\n\n{latest}\n\n{URL}"
-        send_telegram(message)
+    for notice in notices:
 
-        with open("last_notice.txt","w") as f:
-            f.write(latest)
+        h = hashlib.md5(notice.encode()).hexdigest()
+
+        if h not in processed:
+
+            message = f"📢 New DCRUST Notice\n\n{notice}\n\n{URL}"
+
+            send_telegram(message)
+
+            save_hash(h)
+
 
 if __name__ == "__main__":
     main()
